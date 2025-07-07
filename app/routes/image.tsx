@@ -10,8 +10,13 @@ import {
   Eye,
   Palette,
   Camera,
-  Sparkles
+  Sparkles,
+  AlertCircle,
+  CheckCircle,
+  Loader2,
+  Copy
 } from "lucide-react";
+import api, { type ImageGenerationRequest } from "~/lib/api";
 
 import type { Route } from "./+types/image";
 
@@ -48,19 +53,38 @@ export default function ImageGeneration() {
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
 
   const handleGenerate = async () => {
     if (!prompt.trim() || isLoading) return;
     
     setIsLoading(true);
+    setError(null);
+    setGeneratedImage(null);
     
-    // Simulate image generation - In production, this would call your backend
-    setTimeout(() => {
-      // Using a placeholder image service for demo
-      const imageUrl = `https://picsum.photos/400/400?random=${Date.now()}`;
-      setGeneratedImage(imageUrl);
+    try {
+      const request: ImageGenerationRequest = {
+        prompt: prompt.trim(),
+        style: selectedStyle,
+        size: "1024x1024"
+      };
+
+      const response = await api.generateImage(request);
+      
+      if (response.image_data) {
+        // Convert base64 to data URL
+        setGeneratedImage(`data:image/jpeg;base64,${response.image_data}`);
+      } else if (response.image_url) {
+        setGeneratedImage(response.image_url);
+      } else {
+        throw new Error("No image data received");
+      }
+    } catch (err) {
+      console.error('Image generation error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to generate image');
+    } finally {
       setIsLoading(false);
-    }, 3000);
+    }
   };
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -70,8 +94,11 @@ export default function ImageGeneration() {
       reader.onload = (e) => {
         setUploadedImage(e.target?.result as string);
         setAnalysisResult("");
+        setError(null);
       };
       reader.readAsDataURL(file);
+    } else {
+      setError("Please select a valid image file");
     }
   };
 
@@ -79,12 +106,22 @@ export default function ImageGeneration() {
     if (!uploadedImage || isLoading) return;
     
     setIsLoading(true);
+    setError(null);
     
-    // Simulate image analysis - In production, this would call your backend
-    setTimeout(() => {
-      setAnalysisResult("This is a demo analysis. In the full implementation, AI would analyze your image and provide detailed insights about its contents, objects, people, emotions, colors, composition, and more.");
+    try {
+      // Convert data URL to File object
+      const response = await fetch(uploadedImage);
+      const blob = await response.blob();
+      const file = new File([blob], "image.jpg", { type: blob.type });
+      
+      const analysisResponse = await api.analyzeImage(file, prompt || "Analyze this image and describe what you see.");
+      setAnalysisResult(analysisResponse.content);
+    } catch (err) {
+      console.error('Image analysis error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to analyze image');
+    } finally {
       setIsLoading(false);
-    }, 2000);
+    }
   };
 
   const downloadImage = async () => {
@@ -102,6 +139,17 @@ export default function ImageGeneration() {
         window.URL.revokeObjectURL(url);
       } catch (error) {
         console.error('Error downloading image:', error);
+        setError('Failed to download image');
+      }
+    }
+  };
+
+  const copyAnalysisResult = async () => {
+    if (analysisResult) {
+      try {
+        await navigator.clipboard.writeText(analysisResult);
+      } catch (err) {
+        console.error("Failed to copy text: ", err);
       }
     }
   };
@@ -351,7 +399,25 @@ export default function ImageGeneration() {
             )}
           </>
         )}
+
+        {/* Error Display */}
+        {error && (
+          <div className="max-w-lg mx-auto px-4 pb-4">
+            <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 p-4 rounded-r-xl">
+              <div className="flex items-center">
+                <AlertCircle className="w-5 h-5 text-red-400 mr-2" />
+                <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+                <button
+                  onClick={() => setError(null)}
+                  className="ml-auto text-red-400 hover:text-red-600"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
-}
+};

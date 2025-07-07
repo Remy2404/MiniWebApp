@@ -9,8 +9,13 @@ import {
   RotateCcw,
   Upload,
   FileAudio,
-  Languages
+  Languages,
+  AlertCircle,
+  CheckCircle,
+  Copy,
+  Loader2
 } from "lucide-react";
+import api from "~/lib/api";
 
 import type { Route } from "./+types/voice";
 
@@ -40,9 +45,12 @@ export default function VoiceToText() {
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const [selectedLanguage, setSelectedLanguage] = useState("en-US");
   const [transcription, setTranscription] = useState("");
+  const [confidence, setConfidence] = useState<number | null>(null);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -94,7 +102,9 @@ export default function VoiceToText() {
     setRecordingTime(0);
     setAudioBlob(null);
     setTranscription("");
+    setConfidence(null);
     setIsPlaying(false);
+    setError(null);
     if (recordingIntervalRef.current) {
       clearInterval(recordingIntervalRef.current);
     }
@@ -118,13 +128,32 @@ export default function VoiceToText() {
   };
 
   const transcribeAudio = async () => {
+    if (!audioBlob) {
+      setError("No audio to transcribe");
+      return;
+    }
+
     setRecordingState("processing");
+    setIsProcessing(true);
+    setError(null);
     
-    // Simulate API call - In production, this would send audio to your backend
-    setTimeout(() => {
-      setTranscription("This is a demo transcription. In the full implementation, your audio would be processed by the AI transcription service and the result would appear here.");
+    try {
+      // Convert blob to file
+      const audioFile = new File([audioBlob], "audio.webm", { type: audioBlob.type });
+      
+      // Call the real API
+      const response = await api.transcribeVoice(audioFile);
+      
+      setTranscription(response.text);
+      setConfidence(response.confidence || null);
       setRecordingState("recorded");
-    }, 2000);
+    } catch (err) {
+      console.error('Voice transcription error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to transcribe audio');
+      setRecordingState("recorded");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const formatTime = (seconds: number) => {
@@ -133,12 +162,39 @@ export default function VoiceToText() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file && file.type.startsWith('audio/')) {
       setAudioBlob(file);
       setRecordingState("recorded");
       setRecordingTime(0);
+      setError(null);
+      
+      // Auto-transcribe uploaded file
+      setIsProcessing(true);
+      try {
+        const response = await api.transcribeVoice(file);
+        setTranscription(response.text);
+        setConfidence(response.confidence || null);
+      } catch (err) {
+        console.error('Voice transcription error:', err);
+        setError(err instanceof Error ? err.message : 'Failed to transcribe audio');
+      } finally {
+        setIsProcessing(false);
+      }
+    } else {
+      setError("Please select a valid audio file");
+    }
+  };
+
+  const handleCopyTranscription = async () => {
+    if (transcription) {
+      try {
+        await navigator.clipboard.writeText(transcription);
+        // Could add a toast notification here
+      } catch (err) {
+        console.error("Failed to copy text: ", err);
+      }
     }
   };
 
@@ -310,26 +366,88 @@ export default function VoiceToText() {
         {/* Transcription Result */}
         {transcription && (
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-200 dark:border-gray-700">
-            <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Transcription</h3>
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4">
-              <p className="text-gray-900 dark:text-white leading-relaxed">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-green-500" />
+                Transcription Result
+              </h3>
+              <button
+                onClick={handleCopyTranscription}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <Copy className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+            
+            {/* Confidence indicator */}
+            {confidence !== null && (
+              <div className="mb-3">
+                <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+                  <span>Confidence</span>
+                  <span>{Math.round(confidence * 100)}%</span>
+                </div>
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-1">
+                  <div 
+                    className={`h-2 rounded-full ${
+                      confidence > 0.8 ? 'bg-green-500' : 
+                      confidence > 0.6 ? 'bg-yellow-500' : 'bg-red-500'
+                    }`}
+                    style={{ width: `${confidence * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 mb-4">
+              <p className="text-gray-900 dark:text-white leading-relaxed whitespace-pre-wrap">
                 {transcription}
               </p>
             </div>
-            <div className="flex gap-3 mt-4">
+            
+            <div className="flex gap-3">
               <button
-                onClick={() => navigator.clipboard.writeText(transcription)}
-                className="flex-1 bg-purple-500 hover:bg-purple-600 text-white py-2 px-4 rounded-xl font-medium transition-colors"
+                onClick={handleCopyTranscription}
+                className="flex-1 bg-purple-500 hover:bg-purple-600 text-white py-2 px-4 rounded-xl font-medium transition-colors flex items-center justify-center gap-2"
               >
+                <Copy className="w-4 h-4" />
                 Copy Text
               </button>
               <Link
                 to="/chat"
                 state={{ initialMessage: transcription }}
-                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-xl font-medium transition-colors text-center"
+                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-xl font-medium transition-colors text-center flex items-center justify-center gap-2"
               >
+                <Mic className="w-4 h-4" />
                 Send to Chat
               </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Processing indicator */}
+        {isProcessing && (
+          <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-400 p-4 rounded-r-xl">
+            <div className="flex items-center">
+              <Loader2 className="w-5 h-5 text-blue-400 mr-2 animate-spin" />
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                Processing your audio with AI transcription...
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Error Display */}
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 p-4 rounded-r-xl">
+            <div className="flex items-center">
+              <AlertCircle className="w-5 h-5 text-red-400 mr-2" />
+              <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+              <button
+                onClick={() => setError(null)}
+                className="ml-auto text-red-400 hover:text-red-600"
+              >
+                ×
+              </button>
             </div>
           </div>
         )}

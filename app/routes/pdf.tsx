@@ -10,8 +10,13 @@ import {
   Search,
   BarChart3,
   FileText,
-  Zap
+  Zap,
+  AlertCircle,
+  CheckCircle,
+  Loader2,
+  Copy
 } from "lucide-react";
+import api from "~/lib/api";
 
 import type { Route } from "./+types/pdf";
 
@@ -64,10 +69,12 @@ export default function PDFAnalysis() {
   const [question, setQuestion] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState("");
+  const [keyPoints, setKeyPoints] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [documentInfo, setDocumentInfo] = useState<{
     name: string;
     size: string;
-    pages: number;
+    type: string;
   } | null>(null);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -75,13 +82,16 @@ export default function PDFAnalysis() {
     if (file && file.type === 'application/pdf') {
       setUploadedFile(file);
       setAnalysisResult("");
+      setKeyPoints([]);
+      setError(null);
       
-      // Mock document info - in production, this would be extracted from the PDF
       setDocumentInfo({
         name: file.name,
         size: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
-        pages: Math.floor(Math.random() * 50) + 1 // Random page count for demo
+        type: "PDF Document"
       });
+    } else {
+      setError("Please select a valid PDF file");
     }
   };
 
@@ -89,30 +99,56 @@ export default function PDFAnalysis() {
     if (!uploadedFile || isAnalyzing) return;
     
     setIsAnalyzing(true);
+    setError(null);
+    setAnalysisResult("");
+    setKeyPoints([]);
     
-    // Simulate PDF analysis - In production, this would call your backend
-    setTimeout(() => {
-      let result = "";
+    try {
+      // Use the specialized PDF analysis endpoint
+      const response = await api.analyzePDF(uploadedFile);
       
-      switch (analysisType) {
-        case "summary":
-          result = `📄 **Document Summary**\n\nThis is a demo analysis of "${documentInfo?.name}". In the full implementation, the AI would:\n\n• Extract the main themes and topics\n• Identify key sections and their purposes\n• Summarize the document's overall message\n• Highlight important findings and conclusions\n\nThe analysis would be comprehensive and tailored to the specific content of your PDF document.`;
-          break;
-        case "qa":
-          const questionText = question || "What is this document about?";
-          result = `❓ **Question:** ${questionText}\n\n**Answer:** This is a demo response. In the full implementation, the AI would analyze your PDF content and provide detailed answers based on the actual document text, images, and data. The response would be accurate and cite specific sections when relevant.`;
-          break;
-        case "insights":
-          result = `💡 **Key Insights**\n\n1. **Main Theme:** The document primarily focuses on [topic extracted from PDF]\n\n2. **Critical Points:**\n   • Important finding #1\n   • Key recommendation #2\n   • Notable statistic #3\n\n3. **Action Items:** Specific recommendations or next steps mentioned\n\n4. **Risks/Opportunities:** Any challenges or opportunities identified\n\nIn the full implementation, these insights would be extracted directly from your PDF content.`;
-          break;
-        case "data":
-          result = `📊 **Data Analysis**\n\n**Tables & Charts Found:** ${Math.floor(Math.random() * 10) + 1}\n**Numerical Data Points:** ${Math.floor(Math.random() * 50) + 10}\n\n**Key Statistics:**\n• Percentage values: [extracted from document]\n• Financial figures: [extracted from document]\n• Growth metrics: [extracted from document]\n\n**Trends Identified:**\n• Trend 1: [analysis of data patterns]\n• Trend 2: [comparison of metrics]\n\nIn the full implementation, all actual data from your PDF would be extracted and analyzed.`;
-          break;
-      }
-      
-      setAnalysisResult(result);
+      setAnalysisResult(response.summary);
+      setKeyPoints(response.key_points);
+    } catch (err) {
+      console.error('PDF analysis error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to analyze PDF');
+    } finally {
       setIsAnalyzing(false);
-    }, 2500);
+    }
+  };
+
+  const handleQuestionAnalysis = async () => {
+    if (!uploadedFile || !question.trim() || isAnalyzing) return;
+    
+    setIsAnalyzing(true);
+    setError(null);
+    setAnalysisResult("");
+    setKeyPoints([]);
+    
+    try {
+      // Use the general document analysis with a custom prompt
+      const response = await api.analyzeDocument(uploadedFile);
+      
+      // For Q&A, we would ideally have a specialized endpoint that takes the question
+      // For now, we'll use the general analysis and show it as an answer
+      setAnalysisResult(`Based on the document analysis: ${response.summary}`);
+      setKeyPoints(response.key_points);
+    } catch (err) {
+      console.error('PDF Q&A error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to analyze PDF');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const copyResult = async () => {
+    if (analysisResult) {
+      try {
+        await navigator.clipboard.writeText(analysisResult);
+      } catch (err) {
+        console.error("Failed to copy text: ", err);
+      }
+    }
   };
 
   const exportAnalysis = () => {
@@ -189,7 +225,7 @@ export default function PDFAnalysis() {
                     {documentInfo?.name}
                   </h4>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {documentInfo?.size} • {documentInfo?.pages} pages
+                    {documentInfo?.size} • PDF Document
                   </p>
                 </div>
               </div>

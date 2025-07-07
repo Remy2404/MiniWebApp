@@ -6,8 +6,10 @@ import {
   Bot, 
   User, 
   Loader2,
-  MessageCircle
+  MessageCircle,
+  AlertCircle
 } from "lucide-react";
+import api from "~/lib/api";
 
 import type { Route } from "./+types/chat";
 
@@ -36,6 +38,7 @@ export default function Chat() {
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -59,18 +62,38 @@ export default function Chat() {
     setMessages(prev => [...prev, userMessage]);
     setInput("");
     setIsLoading(true);
+    setError(null);
 
-    // Simulate API call - In production, this would call your Telegram bot backend
-    setTimeout(() => {
+    try {
+      // Call the real API instead of mock response
+      const response = await api.sendChatMessage({
+        content: userMessage.content,
+        context: messages.length > 1 ? `Previous conversation with ${messages.length - 1} messages` : undefined
+      });
+
       const aiResponse: Message = {
+        id: response.message_id,
+        content: response.content,
+        role: "assistant",
+        timestamp: new Date(response.timestamp * 1000)
+      };
+
+      setMessages(prev => [...prev, aiResponse]);
+    } catch (err) {
+      console.error('Chat API error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to send message');
+      
+      // Add error message to chat
+      const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: `I received your message: "${userMessage.content}". This is a demo response. In the full implementation, this would connect to your Telegram bot's AI capabilities.`,
+        content: "Sorry, I'm having trouble connecting to the AI service. Please try again.",
         role: "assistant",
         timestamp: new Date()
       };
-      setMessages(prev => [...prev, aiResponse]);
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -153,6 +176,22 @@ export default function Chat() {
         )}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Error banner */}
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 p-4 mx-4 mb-4">
+          <div className="flex items-center">
+            <AlertCircle className="w-5 h-5 text-red-400 mr-2" />
+            <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+            <button
+              onClick={() => setError(null)}
+              className="ml-auto text-red-400 hover:text-red-600"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Input */}
       <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-4 py-3">
