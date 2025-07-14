@@ -164,7 +164,7 @@ export default function Dashboard() {
       {/* Footer */}
       <footer className="max-w-md mx-auto px-4 py-6 text-center">
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          Powered by advanced AI • Made with ❤️ for Telegram
+          Powered by advanced AI • Made with ❤️ by Ramy
         </p>
       </footer>
     </div>
