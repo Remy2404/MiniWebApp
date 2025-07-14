@@ -1,224 +1,341 @@
-import { useState, useRef, useEffect } from "react";
-import { Link } from "react-router";
-import { 
-  ArrowLeft, 
-  Send, 
-  Bot, 
-  User, 
-  Loader2,
-  MessageCircle,
-  AlertCircle
-} from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
 import api from "~/lib/api";
-
 import type { Route } from "./+types/chat";
+import {
+  ChatSidebar,
+  ChatHeader,
+  MessagesList,
+  ChatInput,
+  useChatState,
+  useChatLogic,
+  useChatActions,
+  type Message,
+  type ChatSession,
+} from "~/components/chat";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "Chat - AI Assistant" },
-    { name: "description", content: "Chat with your AI assistant" },
+    { title: "Ploymind AI - Intelligent Assistant" },
+    {
+      name: "description",
+      content:
+        "Experience the future of AI conversation with Ploymind - your comprehensive AI companion",
+    },
   ];
 }
 
-interface Message {
-  id: string;
-  content: string;
-  role: "user" | "assistant";
-  timestamp: Date;
-}
-
 export default function Chat() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      content: "Hello! I'm your AI assistant. How can I help you today?",
-      role: "assistant",
-      timestamp: new Date()
+  // Use the separated state management hook
+  const chatState = useChatState();
+
+  // Extract state for easier access
+  const {
+    messages,
+    setMessages,
+    input,
+    setInput,
+    isLoading,
+    error,
+    setError,
+    connectionStatus,
+    setConnectionStatus,
+    userData,
+    setUserData,
+    selectedModel,
+    setSelectedModel,
+    showModelSelector,
+    setShowModelSelector,
+    isInitialized,
+    setIsInitialized,
+    sidebarOpen,
+    setSidebarOpen,
+    chatHistory,
+    setChatHistory,
+    currentChatId,
+    setCurrentChatId,
+    copiedCode,
+    lastAssistantMessage,
+    setLastAssistantMessage,
+    isRegenerating,
+    touchStart,
+    setTouchStart,
+  } = chatState;  // Load conversation history for memory context with model-specific support
+  const loadChatHistory = useCallback(async (modelFilter?: string) => {
+    try {
+      // Load conversation history for the specific model or current selected model
+      const targetModel = modelFilter || selectedModel;
+      console.log(`Loading chat history for model: ${targetModel}`);
+
+      // First try to get model-specific history
+      let historyResponse = await api.getChatHistory(50, targetModel);
+
+      // If no model-specific history found, load general history
+      if (!historyResponse.messages || historyResponse.messages.length === 0) {
+        historyResponse = await api.getChatHistory(50); // Get all history
+      }
+
+      if (historyResponse.messages && historyResponse.messages.length > 0) {
+        // Convert API messages to UI format
+        const formattedMessages: Message[] = historyResponse.messages.map(
+          (msg) => ({
+            id: msg.message_id,
+            content: msg.content,
+            role: msg.role,
+            timestamp: new Date(msg.timestamp * 1000),
+            model: msg.model_used || targetModel,
+          })
+        );
+
+        // Filter messages for the current model if we have model-specific data
+        const modelSpecificMessages = formattedMessages.filter(
+          (msg) => !modelFilter || !msg.model || msg.model === targetModel
+        );
+
+        // Only show recent messages in UI (last 10), but keep full history for context
+        const recentMessages = modelSpecificMessages.slice(-10);
+        setMessages(recentMessages);
+
+        // Create chat sessions from conversation groups
+        const sessions = createChatSessionsFromHistory(formattedMessages);
+        setChatHistory(sessions);
+
+        if (!currentChatId && sessions.length > 0) {
+          setCurrentChatId(sessions[0].id);
+        }
+
+        console.log(
+          `Loaded ${formattedMessages.length} total messages, ${modelSpecificMessages.length} for model ${targetModel}, showing ${recentMessages.length} recent messages`
+        );
+      } else {
+        // Add welcome message only if no history exists
+        addWelcomeMessage();
+      }
+    } catch (error) {
+      console.error("Failed to load chat history:", error);
+      // Add welcome message on error
+      addWelcomeMessage();
     }
-  ]);
-  const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  }, [selectedModel, setMessages, setChatHistory, currentChatId, setCurrentChatId]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  // Update chat session in history
+  const updateChatSession = useCallback((updatedMessages: Message[]) => {
+    if (updatedMessages.length === 0) return;
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    const lastMessage = updatedMessages[updatedMessages.length - 1];
+    const firstUserMessage = updatedMessages.find((m) => m.role === "user");
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      content: input.trim(),
-      role: "user",
-      timestamp: new Date()
+    const chatSession: ChatSession = {
+      id: currentChatId || `chat_${Date.now()}`,
+      title: firstUserMessage
+        ? firstUserMessage.content.substring(0, 30) +
+          (firstUserMessage.content.length > 30 ? "..." : "")
+        : "Conversation",
+      timestamp: lastMessage.timestamp,
+      preview:
+        lastMessage.content.substring(0, 50) +
+        (lastMessage.content.length > 50 ? "..." : ""),
+      model: selectedModel,
+      messageCount: updatedMessages.filter((m) => m.id !== "welcome").length,
     };
 
-    setMessages(prev => [...prev, userMessage]);
-    setInput("");
-    setIsLoading(true);
-    setError(null);
+    setChatHistory((prev) => {
+      const existing = prev.find((session) => session.id === chatSession.id);
+      if (existing) {
+        return prev.map((session) =>
+          session.id === chatSession.id ? chatSession : session
+        );
+      }
+      return [chatSession, ...prev];
+    });
 
-    try {
-      // Call the real API instead of mock response
-      const response = await api.sendChatMessage({
-        content: userMessage.content,
-        context: messages.length > 1 ? `Previous conversation with ${messages.length - 1} messages` : undefined
+    if (!currentChatId) {
+      setCurrentChatId(chatSession.id);
+    }
+  }, [currentChatId, selectedModel, setChatHistory, setCurrentChatId]);
+
+  // Use the chat logic hook
+  const { addWelcomeMessage, createChatSessionsFromHistory } = useChatLogic({
+    ...chatState,
+  });
+
+  // Use the chat actions hook
+  const chatActions = useChatActions({
+    ...chatState,
+    addWelcomeMessage,
+    loadChatHistory,
+    updateChatSession,
+  });
+
+  const {
+    handleSend,
+    copyToClipboard,
+    regenerateLastMessage,
+    selectModel,
+    startNewChat,
+    loadChatFromHistory,
+    deleteChatFromHistory,
+    handleKeyDown,
+  } = chatActions;  // Load chat history when component is initialized and model is selected
+  useEffect(() => {
+    if (isInitialized && selectedModel && userData) {
+      console.log(`Loading chat history for initialized component with model: ${selectedModel}`);
+      loadChatHistory(selectedModel).catch(error => {
+        console.error('Failed to load initial chat history:', error);
       });
-
-      const aiResponse: Message = {
-        id: response.message_id,
-        content: response.content,
-        role: "assistant",
-        timestamp: new Date(response.timestamp * 1000)
-      };
-
-      setMessages(prev => [...prev, aiResponse]);
-    } catch (err) {
-      console.error('Chat API error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to send message');
-      
-      // Add error message to chat
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: "Sorry, I'm having trouble connecting to the AI service. Please try again.",
-        role: "assistant",
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
     }
+  }, [isInitialized, selectedModel, userData, loadChatHistory]);
+
+  // Track last assistant message for regenerate functionality
+  useEffect(() => {
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage && lastMessage.role === 'assistant' && lastMessage.id !== 'welcome') {
+      setLastAssistantMessage(lastMessage);
+    }
+  }, [messages, setLastAssistantMessage]);
+
+  // Toggle sidebar with responsive behavior
+  const toggleSidebar = useCallback(() => {
+    setSidebarOpen((prev) => !prev);
+  }, [setSidebarOpen]);
+
+  // Auto-close sidebar on mobile when clicking outside
+  useEffect(() => {
+    const handleResize = () => {
+      // Auto-close sidebar on mobile when rotating or resizing
+      if (
+        typeof window !== "undefined" &&
+        window.innerWidth < 768 &&
+        sidebarOpen
+      ) {
+        setSidebarOpen(false);
+      }
+    };
+
+    const handleClickOutside = (event: MouseEvent) => {
+      // Close sidebar when clicking outside on mobile
+      if (
+        typeof window !== "undefined" &&
+        window.innerWidth < 768 &&
+        sidebarOpen
+      ) {
+        const sidebar = document.getElementById("chat-sidebar");
+        const target = event.target as Node;
+        if (sidebar && !sidebar.contains(target)) {
+          setSidebarOpen(false);
+        }
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("resize", handleResize);
+      document.addEventListener("mousedown", handleClickOutside);
+
+      return () => {
+        window.removeEventListener("resize", handleResize);
+        document.removeEventListener("mousedown", handleClickOutside);
+      };
+    }
+  }, [sidebarOpen, setSidebarOpen]);
+
+  // Touch gesture support for sidebar
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStart(e.targetTouches[0].clientX);
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStart || typeof window === "undefined") return;
+
+    const touchEnd = e.changedTouches[0].clientX;
+    const swipeDistance = touchStart - touchEnd;
+    const minSwipeDistance = 50;
+
+    // Only handle swipes on mobile
+    if (window.innerWidth < 768) {
+      if (swipeDistance > minSwipeDistance && sidebarOpen) {
+        // Swipe left to close sidebar
+        setSidebarOpen(false);
+      } else if (
+        swipeDistance < -minSwipeDistance &&
+        !sidebarOpen &&
+        touchStart < 50
+      ) {
+        // Swipe right from left edge to open sidebar
+        setSidebarOpen(true);
+      }
     }
-  };
+
+    setTouchStart(null);
+  };  // Loading screen
+  if (!isInitialized) {
+    return (
+      <div className="h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="relative">
+            <div className="w-20 h-20 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-full mx-auto animate-pulse" />
+            <div className="absolute inset-0 w-20 h-20 bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 rounded-full mx-auto animate-ping opacity-75" />
+          </div>
+          <p className="text-white/80 mt-4 text-lg">
+            Initializing Ploymind AI...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
-      {/* Header */}
-      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
-        <div className="flex items-center gap-3">
-          <Link 
-            to="/"
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-          </Link>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-              <Bot className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="font-semibold text-gray-900 dark:text-white">AI Assistant</h1>
-              <p className="text-sm text-green-500">Online</p>
-            </div>
-          </div>
-          <MessageCircle className="w-5 h-5 text-blue-500 ml-auto" />
-        </div>
-      </header>
+    <div
+      className="h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex text-white overflow-hidden"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Sidebar */}
+      <ChatSidebar
+        sidebarOpen={sidebarOpen}
+        chatHistory={chatHistory}
+        currentChatId={currentChatId}
+        onToggleSidebar={toggleSidebar}
+        onStartNewChat={startNewChat}
+        onLoadChatFromHistory={loadChatFromHistory}
+        onDeleteChatFromHistory={deleteChatFromHistory}
+      />
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
-          >
-            {message.role === "assistant" && (
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
-                <Bot className="w-4 h-4 text-white" />
-              </div>
-            )}
-            <div
-              className={`max-w-[80%] p-3 rounded-2xl ${
-                message.role === "user"
-                  ? "bg-blue-500 text-white rounded-br-sm"
-                  : "bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 rounded-bl-sm"
-              }`}
-            >
-              <p className="text-sm leading-relaxed">{message.content}</p>
-              <p className={`text-xs mt-1 ${
-                message.role === "user" ? "text-blue-100" : "text-gray-500 dark:text-gray-400"
-              }`}>
-                {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </p>
-            </div>
-            {message.role === "user" && (
-              <div className="w-8 h-8 bg-gray-300 dark:bg-gray-600 rounded-full flex items-center justify-center flex-shrink-0">
-                <User className="w-4 h-4 text-gray-600 dark:text-gray-300" />
-              </div>
-            )}
-          </div>
-        ))}
-        
-        {isLoading && (
-          <div className="flex gap-3 justify-start">
-            <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
-              <Bot className="w-4 h-4 text-white" />
-            </div>
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl rounded-bl-sm p-3">
-              <div className="flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                <span className="text-sm text-gray-600 dark:text-gray-400">AI is thinking...</span>
-              </div>
-            </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
+      {/* Main Chat Area */}
+      <div
+        className={`flex-1 flex flex-col transition-all duration-300 ${
+          sidebarOpen ? "md:ml-0" : "ml-0"
+        }`}
+      >
+        {/* Header */}
+        <ChatHeader
+          selectedModel={selectedModel}
+          connectionStatus={connectionStatus}
+          showModelSelector={showModelSelector}
+          onToggleSidebar={toggleSidebar}
+          onToggleModelSelector={() => setShowModelSelector(!showModelSelector)}
+          onSelectModel={selectModel}
+          onStartNewChat={startNewChat}
+        />
 
-      {/* Error banner */}
-      {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 p-4 mx-4 mb-4">
-          <div className="flex items-center">
-            <AlertCircle className="w-5 h-5 text-red-400 mr-2" />
-            <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-            <button
-              onClick={() => setError(null)}
-              className="ml-auto text-red-400 hover:text-red-600"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-      )}
+        {/* Messages Area */}
+        <MessagesList
+          messages={messages}
+          isLoading={isLoading}
+          copiedCode={copiedCode}
+          lastAssistantMessage={lastAssistantMessage}
+          isRegenerating={isRegenerating}
+          onCopyToClipboard={copyToClipboard}
+          onRegenerateMessage={regenerateLastMessage}
+        />
 
-      {/* Input */}
-      <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-4 py-3">
-        <div className="flex gap-3 items-end">
-          <div className="flex-1 relative">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Type a message..."
-              rows={1}
-              className="w-full px-4 py-3 bg-gray-100 dark:bg-gray-700 rounded-2xl border-0 resize-none focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
-              style={{ minHeight: "48px", maxHeight: "120px" }}
-            />
-          </div>
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || isLoading}
-            className="w-12 h-12 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 rounded-full flex items-center justify-center transition-colors"
-          >
-            {isLoading ? (
-              <Loader2 className="w-5 h-5 text-white animate-spin" />
-            ) : (
-              <Send className="w-5 h-5 text-white" />
-            )}
-          </button>
-        </div>
+        {/* Input Area */}
+        <ChatInput
+          input={input}
+          isLoading={isLoading}
+          error={error}
+          onInputChange={setInput}
+          onSend={handleSend}
+          onKeyDown={handleKeyDown}
+        />
       </div>
     </div>
   );

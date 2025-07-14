@@ -22,40 +22,70 @@ interface WebAppUser {
   is_premium?: boolean;
 }
 
+interface AuthValidationResponse {
+  valid: boolean;
+  user?: WebAppUser;
+  auth_date: number;
+  timestamp: number;
+  preferences?: {
+    selected_model: string;
+    settings: Record<string, any>;
+    stats: Record<string, any>;
+  };
+  conversation_stats?: {
+    has_history: boolean;
+    last_activity?: number;
+  };
+}
+
 interface ChatMessage {
   content: string;
+  model?: string;
   context?: string;
+}
+
+interface ChatHistoryMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+  message_id: string;
+  model_used?: string;
+}
+
+interface ChatHistoryResponse {
+  messages: ChatHistoryMessage[];
+  total_messages: number;
+  user_id: number;
 }
 
 interface ChatResponse {
   content: string;
   timestamp: number;
   message_id: string;
-}
-
-interface CodeRequest {
-  code: string;
-  language?: string;
-  action: 'review' | 'explain' | 'debug' | 'optimize';
-}
-
-interface CodeResponse {
-  result: string;
-  suggestions?: string[];
-  timestamp: number;
+  model_used: string;
 }
 
 interface VoiceResponse {
   text: string;
   confidence?: number;
   language?: string;
+  ai_response?: string;
+  model_used?: string;
   timestamp: number;
 }
 
-interface DocumentAnalysisResponse {
-  summary: string;
-  key_points: string[];
-  content_type: string;
+interface ModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+  supports_images: boolean;
+  max_tokens: number;
+  capabilities: string[];
+}
+
+interface ModelsResponse {
+  models: ModelInfo[];
+  default_model: string;
   timestamp: number;
 }
 
@@ -63,32 +93,6 @@ interface ApiError {
   error: string;
   detail?: string;
   status_code?: number;
-}
-
-interface ImageGenerationRequest {
-  prompt: string;
-  style?: string;
-  size?: string;
-}
-
-interface ImageGenerationResponse {
-  image_url?: string;
-  image_data?: string; // Base64 encoded
-  timestamp: number;
-}
-
-interface DocumentGenerationRequest {
-  prompt: string;
-  doc_type: 'article' | 'report' | 'essay' | 'letter' | 'memo';
-  format: 'pdf' | 'docx' | 'txt';
-  model?: string;
-}
-
-interface DocumentGenerationResponse {
-  document_data: string; // Base64 encoded
-  filename: string;
-  content_type: string;
-  timestamp: number;
 }
 
 class TelegramWebAppAPI {
@@ -108,9 +112,9 @@ class TelegramWebAppAPI {
       
       if (initData) {
         this.authHeader = `tma ${initData}`;
-        console.log('Telegram Web App authentication initialized');
+        console.log('✅ Telegram Web App authentication initialized');
       } else {
-        console.warn('No Telegram Web App init data available');
+        console.warn('⚠️ No Telegram Web App init data available - using development mode');
       }
     } else {
       // Development mode fallback - create a mock auth header
@@ -133,9 +137,9 @@ class TelegramWebAppAPI {
           .join('&');
           
         this.authHeader = `tma ${queryString}`;
-        console.log('Development mode: Using mock authentication');
+        console.log('🔧 Development mode: Using mock authentication');
       } else {
-        console.warn('No Telegram Web App environment detected');
+        console.warn('❌ No Telegram Web App environment detected and not in development mode');
       }
     }
   }
@@ -224,7 +228,7 @@ class TelegramWebAppAPI {
   }
 
   // Authentication validation
-  async validateAuth(): Promise<{ valid: boolean; user?: WebAppUser }> {
+  async validateAuth(): Promise<AuthValidationResponse> {
     return this.makeRequest('/auth/validate', {
       method: 'POST',
     });
@@ -238,64 +242,63 @@ class TelegramWebAppAPI {
     });
   }
 
-  // Code analysis
-  async analyzeCode(request: CodeRequest): Promise<CodeResponse> {
-    return this.makeRequest('/code', {
-      method: 'POST',
-      body: JSON.stringify(request),
+  // Get chat history
+  async getChatHistory(limit: number = 50, model?: string): Promise<ChatHistoryResponse> {
+    const params = new URLSearchParams({ limit: limit.toString() });
+    if (model) {
+      params.append('model', model);
+    }
+    
+    return this.makeRequest(`/chat/history?${params}`, {
+      method: 'GET',
     });
   }
 
-  // Voice transcription
-  async transcribeVoice(audioFile: File): Promise<VoiceResponse> {
+  // Clear chat history
+  async clearChatHistory(model?: string): Promise<{ success: boolean; message: string; timestamp: number }> {
+    const params = model ? new URLSearchParams({ model }) : '';
+    const url = `/chat/history${params ? `?${params}` : ''}`;
+    
+    return this.makeRequest(url, {
+      method: 'DELETE',
+    });
+  }
+
+  // Get available models
+  async getAvailableModels(): Promise<ModelsResponse> {
+    return this.makeRequest('/models', {
+      method: 'GET',
+    });
+  }
+
+  // Select AI model
+  async selectModel(modelId: string): Promise<{ success: boolean; selected_model: string; message: string; timestamp: number }> {
+    return this.makeRequest('/models/select', {
+      method: 'POST',
+      body: JSON.stringify({ model_id: modelId }),
+    });
+  }
+
+  // Get available models (alias for getAvailableModels)
+  async getModels(): Promise<ModelsResponse> {
+    return this.getAvailableModels();
+  }
+
+  // Voice transcription with optional AI processing
+  async transcribeVoice(
+    audioFile: File, 
+    model?: string, 
+    processWithAI: boolean = true
+  ): Promise<VoiceResponse> {
     const formData = new FormData();
     formData.append('audio', audioFile);
     
+    if (model) {
+      formData.append('model', model);
+    }
+    formData.append('process_with_ai', processWithAI.toString());
+    
     return this.makeFormDataRequest('/voice/transcribe', formData);
-  }
-
-  // Image analysis
-  async analyzeImage(
-    imageFile: File, 
-    prompt: string = 'Analyze this image and describe what you see.'
-  ): Promise<ChatResponse> {
-    const formData = new FormData();
-    formData.append('image', imageFile);
-    formData.append('prompt', prompt);
-    
-    return this.makeFormDataRequest('/image/analyze', formData);
-  }
-
-  // Document analysis
-  async analyzeDocument(documentFile: File): Promise<DocumentAnalysisResponse> {
-    const formData = new FormData();
-    formData.append('document', documentFile);
-    
-    return this.makeFormDataRequest('/document/analyze', formData);
-  }
-
-  // Image generation
-  async generateImage(request: ImageGenerationRequest): Promise<ImageGenerationResponse> {
-    return this.makeRequest('/image/generate', {
-      method: 'POST',
-      body: JSON.stringify(request),
-    });
-  }
-
-  // Document generation
-  async generateDocument(request: DocumentGenerationRequest): Promise<DocumentGenerationResponse> {
-    return this.makeRequest('/document/generate', {
-      method: 'POST',
-      body: JSON.stringify(request),
-    });
-  }
-
-  // PDF analysis (specialized document analysis)
-  async analyzePDF(pdfFile: File): Promise<DocumentAnalysisResponse> {
-    const formData = new FormData();
-    formData.append('pdf_file', pdfFile);
-    
-    return this.makeFormDataRequest('/pdf/analyze', formData);
   }
 
   // Health check
@@ -320,15 +323,13 @@ const api = new TelegramWebAppAPI();
 export default api;
 export type {
   WebAppUser,
+  AuthValidationResponse,
   ChatMessage,
+  ChatHistoryMessage,
+  ChatHistoryResponse,
   ChatResponse,
-  CodeRequest,
-  CodeResponse,
   VoiceResponse,
-  DocumentAnalysisResponse,
+  ModelInfo,
+  ModelsResponse,
   ApiError,
-  ImageGenerationRequest,
-  ImageGenerationResponse,
-  DocumentGenerationRequest,
-  DocumentGenerationResponse,
 };
