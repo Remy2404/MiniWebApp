@@ -1,4 +1,5 @@
 import { reactRouter } from "@react-router/dev/vite";
+import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, loadEnv } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
@@ -23,7 +24,8 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
-    plugins: [tailwindcss(), reactRouter(), tsconfigPaths()],
+    // Add @vitejs/plugin-react here
+    plugins: [react(), tailwindcss(), reactRouter(), tsconfigPaths()],
     server: {
       proxy: {
         "/api": {
