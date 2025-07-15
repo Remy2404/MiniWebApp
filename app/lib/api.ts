@@ -121,7 +121,6 @@ class TelegramWebAppAPI {
     if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
       const webApp = window.Telegram.WebApp;
       const initData = webApp.initData;
-      
       if (initData) {
         this.authHeader = `tma ${initData}`;
         if (isDevelopment()) {
@@ -131,35 +130,37 @@ class TelegramWebAppAPI {
       } else {
         if (isDevelopment()) {
           console.warn('⚠️ No Telegram Web App init data available - falling back to development mode');
+        } else {
+          // In production, show a clear error if not running inside Telegram
+          throw new Error('❌ This app must be opened from Telegram. Telegram WebApp initData is missing.');
         }
       }
-    }
-    
-    // Development mode fallback - extract user ID dynamically
-    if (typeof window !== 'undefined' && isDevelopment()) {
-      let userId = this.extractUserIdFromTelegramData() || 123456789; // Dynamic extraction with fallback
-      
-      // Create a development auth token with dynamic user ID
-      const devAuthData = {
-        user: {
-          id: userId,
-          first_name: "User",
-          last_name: `${userId}`,
-          username: `user${userId}`
-        },
-        auth_date: Math.floor(Date.now() / 1000),
-        hash: "dev_hash_placeholder"
-      };
-      
-      // Create a simple query string for development
-      const queryString = Object.entries(devAuthData)
-        .map(([key, value]) => `${key}=${typeof value === 'object' ? JSON.stringify(value) : value}`)
-        .join('&');
-        
-      this.authHeader = `tma ${queryString}`;
-      console.log(`🔧 Development mode: Using mock authentication for user ${userId}`);
-    } else if (!isDevelopment()) {
-      console.warn('❌ No Telegram Web App environment detected in production mode');
+    } else {
+      // Not running inside Telegram WebApp
+      if (isDevelopment()) {
+        // Development mode fallback - extract user ID dynamically
+        let userId = this.extractUserIdFromTelegramData() || 123456789; // Dynamic extraction with fallback
+        // Create a development auth token with dynamic user ID
+        const devAuthData = {
+          user: {
+            id: userId,
+            first_name: "User",
+            last_name: `${userId}`,
+            username: `user${userId}`
+          },
+          auth_date: Math.floor(Date.now() / 1000),
+          hash: "dev_hash_placeholder"
+        };
+        // Create a simple query string for development
+        const queryString = Object.entries(devAuthData)
+          .map(([key, value]) => `${key}=${typeof value === 'object' ? JSON.stringify(value) : value}`)
+          .join('&');
+        this.authHeader = `tma ${queryString}`;
+        console.log(`🔧 Development mode: Using mock authentication for user ${userId}`);
+      } else {
+        // Production: show a clear error if not running inside Telegram
+        throw new Error('❌ This app must be opened from Telegram. Telegram WebApp context is missing.');
+      }
     }
   }
 
