@@ -12,8 +12,8 @@ FROM node:20-alpine AS build-env
 COPY . /app/
 COPY --from=development-dependencies-env /app/node_modules /app/node_modules
 WORKDIR /app
-ARG PRODUCTION
-ENV PRODUCTION=$PRODUCTION
+ARG VITE_BACKEND_URL
+ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
 RUN npm run build
 
 FROM node:20-alpine
@@ -29,6 +29,6 @@ EXPOSE 10000
 
 # Add health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:10000/health || exit 1
+  CMD curl -f http://localhost:10000/ || exit 1
 
 CMD ["npm", "run", "start"]

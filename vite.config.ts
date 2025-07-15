@@ -49,14 +49,19 @@ export default defineConfig(({ mode }) => {
     },
     // Production build optimizations
     build: {
-      // Remove console logs in production for security
-      minify: mode === "production" ? "terser" : false,
+      // Enable minification for production
+      minify: mode === "production" ? "terser" : "esbuild",
       terserOptions: mode === "production" ? {
         compress: {
           drop_console: true,
           drop_debugger: true,
         },
+        mangle: {
+          safari10: true,
+        },
       } : undefined,
+      // Increase chunk size warning limit to handle larger bundles
+      chunkSizeWarningLimit: 1000,
     },
   };
 });
