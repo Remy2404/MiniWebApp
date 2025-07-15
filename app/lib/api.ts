@@ -117,15 +117,15 @@ class TelegramWebAppAPI {
         console.warn('⚠️ No Telegram Web App init data available - using development mode');
       }
     } else {
-      // Development mode fallback - create a mock auth header
+      // Development mode fallback - use the actual user ID from the logs
       if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-        // Create a basic development auth token
+        // Create a development auth token with the actual user ID 806762900
         const devAuthData = {
           user: {
-            id: 123456789,
-            first_name: "Dev",
-            last_name: "User",
-            username: "devuser"
+            id: 806762900,  // Use the actual user ID from the logs
+            first_name: "User",
+            last_name: "806762900",
+            username: "user806762900"
           },
           auth_date: Math.floor(Date.now() / 1000),
           hash: "dev_hash_placeholder"
@@ -137,7 +137,7 @@ class TelegramWebAppAPI {
           .join('&');
           
         this.authHeader = `tma ${queryString}`;
-        console.log('🔧 Development mode: Using mock authentication');
+        console.log('🔧 Development mode: Using mock authentication for user 806762900');
       } else {
         console.warn('❌ No Telegram Web App environment detected and not in development mode');
       }
@@ -314,6 +314,26 @@ class TelegramWebAppAPI {
   // Method to manually set auth header (for testing)
   setAuthHeader(authHeader: string): void {
     this.authHeader = authHeader;
+  }
+
+  // Get current user ID (useful for debugging)
+  getCurrentUserId(): number | null {
+    if (!this.authHeader) return null;
+    
+    try {
+      const initData = this.authHeader.replace('tma ', '');
+      const params = new URLSearchParams(initData);
+      const userParam = params.get('user');
+      
+      if (userParam) {
+        const userData = JSON.parse(decodeURIComponent(userParam));
+        return userData.id;
+      }
+    } catch (error) {
+      console.warn('Could not extract user ID from auth header:', error);
+    }
+    
+    return null;
   }
 }
 
