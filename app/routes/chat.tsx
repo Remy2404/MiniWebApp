@@ -175,7 +175,15 @@ export default function Chat() {
     loadChatFromHistory,
     deleteChatFromHistory,
     handleKeyDown,
-  } = chatActions;  // Load chat history when component is initialized and model is selected
+  } = chatActions;
+
+  // Initialize chat state and load data when component mounts
+  useEffect(() => {
+    // Chat initialization happens through the API constructor
+    // No need for manual authentication initialization
+  }, []);
+
+  // Load chat history when component is initialized and model is selected
   useEffect(() => {
     if (isInitialized && selectedModel && userData) {
       console.log(`Loading chat history for initialized component with model: ${selectedModel}`);

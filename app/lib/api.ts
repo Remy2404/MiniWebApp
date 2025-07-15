@@ -110,10 +110,13 @@ class TelegramWebAppAPI {
       this.baseUrl = getApiUrl();
     }
     
-    // Always log API URL for debugging production issues
-    console.log(`🔗 API Base URL: ${this.baseUrl}`);
-    console.log(`🔧 Environment: ${isDevelopment() ? 'Development' : 'Production'}`);
-    this.initializeAuth();
+    // Only initialize auth on client side to prevent server-side errors
+    if (typeof window !== 'undefined') {
+      // Always log API URL for debugging production issues
+      console.log(`🔗 API Base URL: ${this.baseUrl}`);
+      console.log(`🔧 Environment: ${isDevelopment() ? 'Development' : 'Production'}`);
+      this.initializeAuth();
+    }
   }
 
   private initializeAuth(): void {
@@ -131,8 +134,9 @@ class TelegramWebAppAPI {
         if (isDevelopment()) {
           console.warn('⚠️ No Telegram Web App init data available - falling back to development mode');
         } else {
-          // In production, show a clear error if not running inside Telegram
-          throw new Error('❌ This app must be opened from Telegram. Telegram WebApp initData is missing.');
+          // In production, log warning but don't throw error to prevent SSR issues
+          console.warn('❌ This app should be opened from Telegram. Telegram WebApp initData is missing.');
+          return; // Return early, don't throw
         }
       }
     } else {
@@ -158,8 +162,9 @@ class TelegramWebAppAPI {
         this.authHeader = `tma ${queryString}`;
         console.log(`🔧 Development mode: Using mock authentication for user ${userId}`);
       } else {
-        // Production: show a clear error if not running inside Telegram
-        throw new Error('❌ This app must be opened from Telegram. Telegram WebApp context is missing.');
+        // Production: log warning but don't throw to prevent SSR crashes
+        console.warn('❌ This app must be opened from Telegram. Telegram WebApp context is missing.');
+        return; // Return early, don't throw
       }
     }
   }
@@ -193,6 +198,11 @@ class TelegramWebAppAPI {
     }
     if (this.authHeader) {
       headers['Authorization'] = this.authHeader;
+    } else {
+      // If no auth header is available, we might be in SSR or missing Telegram context
+      if (typeof window !== 'undefined') {
+        console.warn('⚠️ No authorization header available. This might cause API request failures.');
+      }
     }
 
     const config: RequestInit = {

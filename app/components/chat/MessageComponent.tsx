@@ -2,7 +2,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
-import { Bot, User, Copy, Check, RotateCcw, Loader2 } from "lucide-react";
+import { User, Copy, Check, RotateCcw, Loader2 } from "lucide-react";
 import type { Message } from "./types";
 
 interface MessageComponentProps {

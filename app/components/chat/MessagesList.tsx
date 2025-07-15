@@ -1,5 +1,5 @@
 import { useRef, useEffect } from "react";
-import { Bot, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { MessageComponent } from "./MessageComponent";
 import type { Message } from "./types";
 
@@ -55,11 +55,8 @@ export function MessagesList({
 
         {isLoading && (
           <div className="flex gap-2 sm:gap-3 md:gap-4 justify-start animate-in slide-in-from-bottom-4 duration-500">
-            <div className="flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg relative">
-              <Bot className="w-4 h-4 sm:w-4.5 sm:h-4.5 md:w-5 md:h-5 text-white" />
-              <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-xl opacity-20 blur animate-pulse" />
-            </div>
-            <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-3 sm:p-4 md:p-5 shadow-lg max-w-xs sm:max-w-sm md:max-w-md">
+            {/* Removed bot icon for cleaner mobile experience */}
+            <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-3 sm:p-4 md:p-5 shadow-lg max-w-xs sm:max-w-sm md:max-w-md ml-2">
               <div className="flex items-center gap-2 sm:gap-3">
                 <div className="flex space-x-1">
                   <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
