@@ -21,4 +21,14 @@ COPY ./package.json package-lock.json /app/
 COPY --from=production-dependencies-env /app/node_modules /app/node_modules
 COPY --from=build-env /app/build /app/build
 WORKDIR /app
+
+# Install curl for health checks
+RUN apk add --no-cache curl
+
+EXPOSE 10000
+
+# Add health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:10000/health || exit 1
+
 CMD ["npm", "run", "start"]
