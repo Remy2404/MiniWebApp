@@ -35,6 +35,16 @@ export default defineConfig(({ mode }) => {
             proxy.on('proxyReq', (proxyReq, req, res) => {
               // Add security headers for API requests
               proxyReq.setHeader('X-Forwarded-For', req.socket.remoteAddress || 'unknown');
+              
+              // CRITICAL: Ensure Authorization header is forwarded
+              if (req.headers.authorization) {
+                proxyReq.setHeader('Authorization', req.headers.authorization);
+              }
+              
+              // Forward other common auth headers
+              if (req.headers['x-auth-token']) {
+                proxyReq.setHeader('X-Auth-Token', req.headers['x-auth-token']);
+              }
             });
           }
         },

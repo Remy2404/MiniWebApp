@@ -110,9 +110,9 @@ class TelegramWebAppAPI {
       this.baseUrl = getApiUrl();
     }
     
-    if (isDevelopment()) {
-      console.log(`🔗 API Base URL: ${this.baseUrl}`);
-    }
+    // Always log API URL for debugging production issues
+    console.log(`🔗 API Base URL: ${this.baseUrl}`);
+    console.log(`🔧 Environment: ${isDevelopment() ? 'Development' : 'Production'}`);
     this.initializeAuth();
   }
 

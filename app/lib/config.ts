@@ -19,12 +19,22 @@ export function getBackendUrl(): string {
         return process.env.VITE_BACKEND_URL || API_CONFIG.DEFAULT_DEV_URL;
     }
     
+    // Debug logging for production troubleshooting
+    console.log('🔧 Environment check:', {
+        hostname: window.location.hostname,
+        VITE_BACKEND_URL: import.meta.env.VITE_BACKEND_URL,
+        isDev: import.meta.env.DEV,
+        mode: import.meta.env.MODE
+    });
+    
     const isLocalhost = window.location.hostname === 'localhost' || 
                                          window.location.hostname.includes('127.0.0.1');
     
     if (isLocalhost) {
         // Development mode - use environment variable or default
-        return import.meta.env.VITE_BACKEND_URL || API_CONFIG.DEFAULT_DEV_URL;
+        const devUrl = import.meta.env.VITE_BACKEND_URL || API_CONFIG.DEFAULT_DEV_URL;
+        console.log('🔧 Using development URL:', devUrl);
+        return devUrl;
     } else {
         // Production mode - get backend URL from environment
         const backendUrl = import.meta.env.VITE_BACKEND_URL;
@@ -32,9 +42,14 @@ export function getBackendUrl(): string {
         if (!backendUrl) {
             console.error('❌ Production backend URL not configured!');
             console.error('   Set VITE_BACKEND_URL environment variable');
-            throw new Error('VITE_BACKEND_URL environment variable is required in production');
+            console.error('   Available env vars:', Object.keys(import.meta.env));
+            // Fallback to Koyeb URL for now
+            const fallbackUrl = 'https://burning-reeta-ramee-are-mee-136105e5.koyeb.app';
+            console.warn('🔧 Using fallback URL:', fallbackUrl);
+            return fallbackUrl;
         }
         
+        console.log('🔧 Using production URL:', backendUrl);
         return backendUrl;
     }
 }
