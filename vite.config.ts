@@ -5,15 +5,21 @@ import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  const baseUrl =
-    mode === "production"
-      ? env.PRODUCTION?.replace(/['"]/g, "")
-      : env.DEVELOPMENT?.replace(/['"]/g, "");
+  
+  // Securely get backend URL from environment variables
+  const backendUrl = env.VITE_BACKEND_URL || env.REACT_APP_BACKEND_URL;
+  
+  // Default fallback for development only
+  const defaultDevUrl = "http://localhost:8000";
+  
+  const baseUrl = mode === "production" 
+    ? backendUrl 
+    : (backendUrl || defaultDevUrl);
 
-  if (!baseUrl) {
-    throw new Error(
-      `Base URL is not defined for mode "${mode}". Please set the appropriate environment variable.`
-    );
+  // Only show warning in development, don't expose URLs in production logs
+  if (!backendUrl && mode === "development") {
+    console.warn("⚠️  Backend URL not set. Using default localhost:8000");
+    console.warn("   Set VITE_BACKEND_URL environment variable for custom backend");
   }
 
   return {
@@ -23,9 +29,34 @@ export default defineConfig(({ mode }) => {
         "/api": {
           target: baseUrl,
           changeOrigin: true,
-          secure: false,
+          secure: mode === "production",
+          // Add additional security headers
+          configure: (proxy, options) => {
+            proxy.on('proxyReq', (proxyReq, req, res) => {
+              // Add security headers for API requests
+              proxyReq.setHeader('X-Forwarded-For', req.socket.remoteAddress || 'unknown');
+            });
+          }
         },
       },
+      // Additional security configurations
+      host: mode === "development" ? "localhost" : false,
+    },
+    // Environment variable configuration
+    define: {
+      // Only expose safe environment variables to the client
+      __DEV__: mode === "development",
+    },
+    // Production build optimizations
+    build: {
+      // Remove console logs in production for security
+      minify: mode === "production" ? "terser" : false,
+      terserOptions: mode === "production" ? {
+        compress: {
+          drop_console: true,
+          drop_debugger: true,
+        },
+      } : undefined,
     },
   };
 });

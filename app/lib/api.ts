@@ -1,6 +1,8 @@
 // API client for Telegram Mini Web App
 // Handles authentication and communication with the backend
 
+import { getApiUrl, isDevelopment } from './config';
+
 // Extend the Window interface to include Telegram
 declare global {
   interface Window {
@@ -99,8 +101,18 @@ class TelegramWebAppAPI {
   private baseUrl: string;
   private authHeader: string | null = null;
 
-  constructor(baseUrl: string = '/api/webapp') {
-    this.baseUrl = baseUrl;
+  constructor(baseUrl?: string) {
+    // Determine the correct base URL based on environment
+    if (baseUrl) {
+      this.baseUrl = baseUrl;
+    } else {
+      // Use the secure configuration-based API URL
+      this.baseUrl = getApiUrl();
+    }
+    
+    if (isDevelopment()) {
+      console.log(`🔗 API Base URL: ${this.baseUrl}`);
+    }
     this.initializeAuth();
   }
 
@@ -112,35 +124,42 @@ class TelegramWebAppAPI {
       
       if (initData) {
         this.authHeader = `tma ${initData}`;
-        console.log('✅ Telegram Web App authentication initialized');
+        if (isDevelopment()) {
+          console.log('✅ Telegram Web App authentication initialized');
+        }
+        return;
       } else {
-        console.warn('⚠️ No Telegram Web App init data available - using development mode');
+        if (isDevelopment()) {
+          console.warn('⚠️ No Telegram Web App init data available - falling back to development mode');
+        }
       }
-    } else {
-      // Development mode fallback - use the actual user ID from the logs
-      if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-        // Create a development auth token with the actual user ID 806762900
-        const devAuthData = {
-          user: {
-            id: 806762900,  // Use the actual user ID from the logs
-            first_name: "User",
-            last_name: "806762900",
-            username: "user806762900"
-          },
-          auth_date: Math.floor(Date.now() / 1000),
-          hash: "dev_hash_placeholder"
-        };
+    }
+    
+    // Development mode fallback - extract user ID dynamically
+    if (typeof window !== 'undefined' && isDevelopment()) {
+      let userId = this.extractUserIdFromTelegramData() || 123456789; // Dynamic extraction with fallback
+      
+      // Create a development auth token with dynamic user ID
+      const devAuthData = {
+        user: {
+          id: userId,
+          first_name: "User",
+          last_name: `${userId}`,
+          username: `user${userId}`
+        },
+        auth_date: Math.floor(Date.now() / 1000),
+        hash: "dev_hash_placeholder"
+      };
+      
+      // Create a simple query string for development
+      const queryString = Object.entries(devAuthData)
+        .map(([key, value]) => `${key}=${typeof value === 'object' ? JSON.stringify(value) : value}`)
+        .join('&');
         
-        // Create a simple query string for development
-        const queryString = Object.entries(devAuthData)
-          .map(([key, value]) => `${key}=${typeof value === 'object' ? JSON.stringify(value) : value}`)
-          .join('&');
-          
-        this.authHeader = `tma ${queryString}`;
-        console.log('🔧 Development mode: Using mock authentication for user 806762900');
-      } else {
-        console.warn('❌ No Telegram Web App environment detected and not in development mode');
-      }
+      this.authHeader = `tma ${queryString}`;
+      console.log(`🔧 Development mode: Using mock authentication for user ${userId}`);
+    } else if (!isDevelopment()) {
+      console.warn('❌ No Telegram Web App environment detected in production mode');
     }
   }
 
@@ -150,7 +169,14 @@ class TelegramWebAppAPI {
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     
-    let headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    let headers: Record<string, string> = { 
+      'Content-Type': 'application/json',
+      // Add CORS headers for cross-origin requests
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+    };
+    
     if (options.headers) {
       if (options.headers instanceof Headers) {
         options.headers.forEach((value, key) => {
@@ -171,23 +197,49 @@ class TelegramWebAppAPI {
     const config: RequestInit = {
       ...options,
       headers,
+      // Add mode for CORS
+      mode: 'cors',
+      credentials: 'omit', // Don't send cookies for cross-origin requests
     };
 
     try {
+      if (isDevelopment()) {
+        console.log(`📡 Making API request to: ${url}`);
+      }
       const response = await fetch(url, config);
       
       if (!response.ok) {
-        const errorData: ApiError = await response.json().catch(() => ({
-          error: 'Unknown error',
-          status_code: response.status
-        }));
+        let errorData: ApiError;
+        try {
+          errorData = await response.json();
+        } catch {
+          errorData = {
+            error: `HTTP ${response.status} - ${response.statusText}`,
+            status_code: response.status
+          };
+        }
         
+        if (isDevelopment()) {
+          console.error(`❌ API Error (${response.status}):`, errorData);
+        }
         throw new Error(errorData.error || `HTTP ${response.status}`);
       }
 
-      return await response.json();
+      const data = await response.json();
+      if (isDevelopment()) {
+        console.log(`✅ API Success for ${endpoint}`);
+      }
+      return data;
     } catch (error) {
-      console.error(`API request failed for ${endpoint}:`, error);
+      if (isDevelopment()) {
+        console.error(`💥 API request failed for ${endpoint}:`, error);
+      }
+      
+      // Provide more helpful error messages
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        throw new Error('Network error: Unable to connect to the backend server. Please check your internet connection.');
+      }
+      
       throw error;
     }
   }
@@ -198,31 +250,57 @@ class TelegramWebAppAPI {
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = {
+      // Don't set Content-Type for FormData, let the browser set it with boundary
+    };
     
     if (this.authHeader) {
       headers['Authorization'] = this.authHeader;
     }
 
     try {
+      if (isDevelopment()) {
+        console.log(`📡 Making form data request to: ${url}`);
+      }
       const response = await fetch(url, {
         method: 'POST',
         headers,
         body: formData,
+        mode: 'cors',
+        credentials: 'omit',
       });
 
       if (!response.ok) {
-        const errorData: ApiError = await response.json().catch(() => ({
-          error: 'Unknown error',
-          status_code: response.status
-        }));
+        let errorData: ApiError;
+        try {
+          errorData = await response.json();
+        } catch {
+          errorData = {
+            error: `HTTP ${response.status} - ${response.statusText}`,
+            status_code: response.status
+          };
+        }
         
+        if (isDevelopment()) {
+          console.error(`❌ Form Data API Error (${response.status}):`, errorData);
+        }
         throw new Error(errorData.error || `HTTP ${response.status}`);
       }
 
-      return await response.json();
+      const data = await response.json();
+      if (isDevelopment()) {
+        console.log(`✅ Form Data API Success for ${endpoint}`);
+      }
+      return data;
     } catch (error) {
-      console.error(`API request failed for ${endpoint}:`, error);
+      if (isDevelopment()) {
+        console.error(`💥 Form data request failed for ${endpoint}:`, error);
+      }
+      
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        throw new Error('Network error: Unable to connect to the backend server. Please check your internet connection.');
+      }
+      
       throw error;
     }
   }
@@ -316,12 +394,44 @@ class TelegramWebAppAPI {
     this.authHeader = authHeader;
   }
 
+  // Initialize and test the API connection
+  async initialize(): Promise<boolean> {
+    try {
+      if (isDevelopment()) {
+        console.log('🚀 Initializing API connection...');
+      }
+      await this.healthCheck();
+      if (isDevelopment()) {
+        console.log('✅ API connection successful');
+      }
+      return true;
+    } catch (error) {
+      if (isDevelopment()) {
+        console.error('❌ API connection failed:', error);
+      }
+      return false;
+    }
+  }
+
   // Get current user ID (useful for debugging)
   getCurrentUserId(): number | null {
     if (!this.authHeader) return null;
     
     try {
       const initData = this.authHeader.replace('tma ', '');
+      
+      // Handle development mode
+      if (initData.includes('dev_hash_placeholder')) {
+        const params = new URLSearchParams(initData);
+        const userParam = params.get('user');
+        if (userParam) {
+          const userData = JSON.parse(decodeURIComponent(userParam));
+          return userData.id;
+        }
+        return null;
+      }
+      
+      // Handle production Telegram WebApp init data
       const params = new URLSearchParams(initData);
       const userParam = params.get('user');
       
@@ -329,8 +439,52 @@ class TelegramWebAppAPI {
         const userData = JSON.parse(decodeURIComponent(userParam));
         return userData.id;
       }
+      
+      // Alternative: try to parse as URL-encoded data
+      const decodedData = decodeURIComponent(initData);
+      const userMatch = decodedData.match(/user=([^&]+)/);
+      if (userMatch) {
+        const userData = JSON.parse(userMatch[1]);
+        return userData.id;
+      }
+      
     } catch (error) {
       console.warn('Could not extract user ID from auth header:', error);
+    }
+    
+    return null;
+  }
+
+  // Extract user ID from Telegram WebApp launch URL or init data
+  private extractUserIdFromTelegramData(): number | null {
+    if (typeof window === 'undefined') return null;
+    
+    try {
+      // First try to get from Telegram WebApp
+      if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
+        return window.Telegram.WebApp.initDataUnsafe.user.id;
+      }
+      
+      // Try from URL parameters (when launched from Telegram)
+      const urlParams = new URLSearchParams(window.location.search);
+      const userParam = urlParams.get('user');
+      
+      if (userParam) {
+        const userData = JSON.parse(decodeURIComponent(userParam));
+        return userData.id;
+      }
+      
+      // Try from hash parameters
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const hashUserParam = hashParams.get('user');
+      
+      if (hashUserParam) {
+        const userData = JSON.parse(decodeURIComponent(hashUserParam));
+        return userData.id;
+      }
+      
+    } catch (error) {
+      console.warn('Failed to extract user ID from Telegram data:', error);
     }
     
     return null;
