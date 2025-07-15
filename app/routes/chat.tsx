@@ -179,8 +179,32 @@ export default function Chat() {
 
   // Initialize chat state and load data when component mounts
   useEffect(() => {
-    // Chat initialization happens through the API constructor
-    // No need for manual authentication initialization
+    // Reinitialize authentication when component mounts on client side
+    if (typeof window !== 'undefined') {
+      console.log('🔄 Chat component mounted, reinitializing auth...');
+      
+      // Wait for Telegram WebApp to be fully loaded
+      const initializeTelegramAuth = () => {
+        if (window.Telegram?.WebApp) {
+          // Tell Telegram the Mini App is ready
+          if (typeof window.Telegram.WebApp.ready === "function") {
+            window.Telegram.WebApp.ready();
+          }
+          
+          // Reinitialize authentication with fresh data
+          api.reinitializeAuth();
+          
+          console.log('✅ Telegram WebApp ready state set and auth reinitialized');
+        } else {
+          console.warn('⚠️ Telegram WebApp not available, retrying in 500ms...');
+          // Retry after a short delay if Telegram WebApp is not yet available
+          setTimeout(initializeTelegramAuth, 500);
+        }
+      };
+      
+      // Start initialization
+      initializeTelegramAuth();
+    }
   }, []);
 
   // Load chat history when component is initialized and model is selected

@@ -3,12 +3,36 @@
 
 import { getApiUrl, isDevelopment } from './config';
 
-// Extend the Window interface to include Telegram
+// Extend the Window interface to include Telegram WebApp
 declare global {
   interface Window {
     Telegram?: {
       WebApp?: {
         initData?: string;
+        initDataUnsafe?: {
+          user?: {
+            id: number;
+            first_name: string;
+            last_name?: string;
+            username?: string;
+            language_code?: string;
+            is_premium?: boolean;
+          };
+          auth_date?: number;
+          hash?: string;
+          query_id?: string;
+          start_param?: string;
+        };
+        version?: string;
+        platform?: string;
+        colorScheme?: 'light' | 'dark';
+        themeParams?: Record<string, string>;
+        isExpanded?: boolean;
+        viewportHeight?: number;
+        viewportStableHeight?: number;
+        ready?: () => void;
+        expand?: () => void;
+        close?: () => void;
         [key: string]: any;
       };
     };
@@ -124,15 +148,63 @@ class TelegramWebAppAPI {
     if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
       const webApp = window.Telegram.WebApp;
       const initData = webApp.initData;
-      if (initData) {
+      
+      // Enhanced debugging for production issues
+      console.log('🔍 Telegram WebApp detection:', {
+        hasWindow: typeof window !== 'undefined',
+        hasTelegram: !!window.Telegram,
+        hasWebApp: !!window.Telegram?.WebApp,
+        hasInitData: !!initData,
+        initDataLength: initData?.length || 0,
+        webAppUser: webApp.initDataUnsafe?.user?.id || 'no-user',
+        platform: webApp.platform || 'unknown',
+        version: webApp.version || 'unknown'
+      });
+      
+      if (initData && initData.length > 0) {
+        // Use the raw initData directly - this is what Telegram validates
         this.authHeader = `tma ${initData}`;
-        if (isDevelopment()) {
-          console.log('✅ Telegram Web App authentication initialized');
+        console.log('✅ Telegram Web App authentication initialized with initData length:', initData.length);
+        
+        // Additional validation - check if initData contains required fields
+        const params = new URLSearchParams(initData);
+        const hasAuth = params.has('auth_date') && params.has('hash');
+        console.log('🔐 InitData validation:', {
+          hasAuthDate: params.has('auth_date'),
+          hasHash: params.has('hash'),
+          hasUser: params.has('user'),
+          isValid: hasAuth
+        });
+        
+        if (!hasAuth) {
+          console.warn('⚠️ InitData missing required authentication fields');
         }
+        
         return;
       } else {
+        console.warn('⚠️ No Telegram Web App init data available or empty');
+        
+        // Try alternative approaches for development/testing
+        if (webApp.initDataUnsafe?.user) {
+          console.log('🔄 InitDataUnsafe available:', {
+            userId: webApp.initDataUnsafe.user.id,
+            firstName: webApp.initDataUnsafe.user.first_name,
+            authDate: webApp.initDataUnsafe.auth_date
+          });
+          
+          // For development, try to construct basic initData from initDataUnsafe
+          if (isDevelopment()) {
+            const user = webApp.initDataUnsafe.user;
+            const authDate = webApp.initDataUnsafe.auth_date || Math.floor(Date.now() / 1000);
+            const mockInitData = `user=${encodeURIComponent(JSON.stringify(user))}&auth_date=${authDate}&hash=dev_hash`;
+            this.authHeader = `tma ${mockInitData}`;
+            console.log('🔧 Development: Using constructed initData from initDataUnsafe');
+            return;
+          }
+        }
+        
         if (isDevelopment()) {
-          console.warn('⚠️ No Telegram Web App init data available - falling back to development mode');
+          console.warn('⚠️ Falling back to development mode');
         } else {
           // In production, log warning but don't throw error to prevent SSR issues
           console.warn('❌ This app should be opened from Telegram. Telegram WebApp initData is missing.');
@@ -141,6 +213,12 @@ class TelegramWebAppAPI {
       }
     } else {
       // Not running inside Telegram WebApp
+      console.log('🔍 Telegram WebApp not detected:', {
+        hasWindow: typeof window !== 'undefined',
+        hasTelegram: typeof window !== 'undefined' && !!window.Telegram,
+        hasWebApp: typeof window !== 'undefined' && !!window.Telegram?.WebApp
+      });
+      
       if (isDevelopment()) {
         // Development mode fallback - extract user ID dynamically
         let userId = this.extractUserIdFromTelegramData() || 123456789; // Dynamic extraction with fallback
@@ -166,6 +244,14 @@ class TelegramWebAppAPI {
         console.warn('❌ This app must be opened from Telegram. Telegram WebApp context is missing.');
         return; // Return early, don't throw
       }
+    }
+  }
+
+  // Public method to reinitialize auth when needed
+  public reinitializeAuth(): void {
+    if (typeof window !== 'undefined') {
+      console.log('🔄 Reinitializing Telegram WebApp authentication...');
+      this.initializeAuth();
     }
   }
 
@@ -198,6 +284,11 @@ class TelegramWebAppAPI {
     }
     if (this.authHeader) {
       headers['Authorization'] = this.authHeader;
+      if (isDevelopment()) {
+        console.log('🔐 Authorization header set:', this.authHeader.substring(0, 20) + '...');
+      } else {
+        console.log('🔐 Authorization header set with length:', this.authHeader.length);
+      }
     } else {
       // If no auth header is available, we might be in SSR or missing Telegram context
       if (typeof window !== 'undefined') {

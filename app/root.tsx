@@ -31,6 +31,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover" />
         <meta name="color-scheme" content="light dark" />
         <meta name="theme-color" content="#2AABEE" />
+        
+        {/* Telegram WebApp Script - Essential for Mini Web Apps */}
+        <script src="https://telegram.org/js/telegram-web-app.js"></script>
+        
         <Meta />
         <Links />
       </head>
