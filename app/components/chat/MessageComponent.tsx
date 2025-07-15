@@ -27,39 +27,36 @@ export function MessageComponent({
   return (
     <div className="group">
       <div
-        className={`flex gap-4 ${
+        className={`flex gap-3 sm:gap-4 ${
           message.role === "user" ? "justify-end" : "justify-start"
         }`}
       >
-        {message.role === "assistant" && (
-          <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-full flex items-center justify-center">
-            <Bot className="w-5 h-5 text-white" />
-          </div>
-        )}
+        {/* Bot icon removed for mobile devices */}
 
         <div
-          className={`max-w-[85%] ${
+          className={`max-w-[88%] sm:max-w-[85%] md:max-w-[80%] ${
             message.role === "user" ? "order-first" : ""
           }`}
         >
           <div
-            className={`rounded-2xl p-4 ${
+            className={`rounded-2xl sm:rounded-3xl p-3 sm:p-4 md:p-6 shadow-lg transition-all duration-300 hover:shadow-xl ${
               message.role === "user"
-                ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white"
-                : "bg-black/30 backdrop-blur-sm border border-white/10 text-white/90"
+                ? "bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white"
+                : "bg-white/5 backdrop-blur-xl border border-white/20 text-white/90"
             }`}
           >
             {message.role === "assistant" ? (
               <div
-                className="text-sm leading-relaxed prose prose-invert prose-sm max-w-none
+                className="text-sm sm:text-base leading-relaxed prose prose-invert prose-sm sm:prose-base max-w-none
                 prose-headings:text-white prose-p:text-white/90 prose-strong:text-white
-                prose-code:text-blue-300 prose-code:bg-black/30 prose-code:px-1 prose-code:rounded
-                prose-pre:bg-black/50 prose-pre:border prose-pre:border-white/10
+                prose-code:text-blue-300 prose-code:bg-black/30 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:text-xs sm:prose-code:text-sm
+                prose-pre:bg-black/50 prose-pre:border prose-pre:border-white/10 prose-pre:text-sm
                 prose-blockquote:border-l-blue-400 prose-blockquote:text-white/80
-                prose-ul:text-white/90 prose-ol:text-white/90
-                prose-li:text-white/90 prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline
+                prose-ul:text-white/90 prose-ol:text-white/90 prose-ul:pl-4 prose-ol:pl-4
+                prose-li:text-white/90 prose-li:text-sm sm:prose-li:text-base prose-li:leading-relaxed
+                prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline
                 prose-table:text-white/90 prose-thead:text-white prose-tbody:text-white/80
-                prose-th:border-white/20 prose-td:border-white/20"
+                prose-th:border-white/20 prose-td:border-white/20 prose-th:text-sm prose-td:text-sm"
               >
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
@@ -81,16 +78,16 @@ export function MessageComponent({
                       
                       return !inline && match ? (
                         <div className="relative group my-4">
-                          <div className="flex items-center justify-between bg-black/70 border border-white/10 rounded-t-lg px-4 py-2">
-                            <span className="text-xs text-white/60 font-medium uppercase">{language}</span>
+                          <div className="flex items-center justify-between bg-gray-900/90 backdrop-blur-sm border border-white/20 rounded-t-xl px-4 py-3">
+                            <span className="text-xs text-white/70 font-semibold uppercase tracking-wider">{language}</span>
                             <button
                               onClick={() => onCopyToClipboard(codeString, codeId)}
-                              className="flex items-center gap-1 px-2 py-1 text-xs text-white/60 hover:text-white bg-white/10 hover:bg-white/20 rounded transition-colors"
+                              className="flex items-center gap-2 px-3 py-1.5 text-xs text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg transition-all duration-200 hover:scale-105"
                             >
                               {copiedCode === codeId ? (
                                 <>
-                                  <Check className="w-3 h-3" />
-                                  Copied
+                                  <Check className="w-3 h-3 text-green-400" />
+                                  Copied!
                                 </>
                               ) : (
                                 <>
@@ -100,7 +97,7 @@ export function MessageComponent({
                               )}
                             </button>
                           </div>
-                          <pre className="bg-black/50 border border-white/10 border-t-0 rounded-b-lg p-4 overflow-x-auto m-0">
+                          <pre className="bg-gray-950/80 backdrop-blur-sm border border-white/20 border-t-0 rounded-b-xl p-4 overflow-x-auto m-0 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
                             <code className={className} {...props}>
                               {children}
                             </code>
@@ -108,7 +105,7 @@ export function MessageComponent({
                         </div>
                       ) : (
                         <code
-                          className="bg-black/30 px-1 py-0.5 rounded text-blue-300"
+                          className="bg-white/10 px-2 py-1 rounded-lg text-blue-300 font-mono text-sm"
                           {...props}
                         >
                           {children}
@@ -116,24 +113,24 @@ export function MessageComponent({
                       );
                     },
                     table: ({ children, ...props }) => (
-                      <div className="overflow-x-auto my-4">
-                        <table className="min-w-full border-collapse border border-white/20 rounded-lg" {...props}>
+                      <div className="overflow-x-auto my-4 rounded-xl border border-white/20">
+                        <table className="min-w-full border-collapse bg-white/5 backdrop-blur-sm" {...props}>
                           {children}
                         </table>
                       </div>
                     ),
                     th: ({ children, ...props }) => (
-                      <th className="border border-white/20 bg-white/10 px-4 py-2 text-left font-semibold" {...props}>
+                      <th className="border border-white/20 bg-white/10 px-4 py-3 text-left font-semibold text-white/90" {...props}>
                         {children}
                       </th>
                     ),
                     td: ({ children, ...props }) => (
-                      <td className="border border-white/20 px-4 py-2" {...props}>
+                      <td className="border border-white/20 px-4 py-3 text-white/80" {...props}>
                         {children}
                       </td>
                     ),
                     blockquote: ({ children, ...props }) => (
-                      <blockquote className="border-l-4 border-blue-400 pl-4 my-4 italic text-white/80 bg-blue-500/10 py-2 rounded-r" {...props}>
+                      <blockquote className="border-l-4 border-blue-400 pl-4 my-4 italic text-white/80 bg-blue-500/10 py-3 rounded-r-lg backdrop-blur-sm" {...props}>
                         {children}
                       </blockquote>
                     ),
@@ -143,16 +140,23 @@ export function MessageComponent({
                 </ReactMarkdown>
               </div>
             ) : (
-              <p className="text-sm leading-relaxed whitespace-pre-wrap">
+              <p className="text-sm sm:text-base md:text-lg leading-relaxed whitespace-pre-wrap font-medium">
                 {message.content}
               </p>
             )}
           </div>
 
-          <div className="flex items-center justify-between mt-2">
-            <div className="flex items-center gap-2 text-xs text-white/40">
-              <span>{message.timestamp.toLocaleTimeString()}</span>
-              {message.model && <span>• {message.model}</span>}
+          <div className="flex items-center justify-between mt-3">
+            <div className="flex items-center gap-2 text-xs text-white/50">
+              <div className="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-full">
+                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
+                <span className="font-medium">{message.timestamp.toLocaleTimeString()}</span>
+              </div>
+              {message.model && (
+                <div className="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-full">
+                  <span className="font-medium">{message.model}</span>
+                </div>
+              )}
             </div>
             
             {/* Regenerate button for last assistant message */}
@@ -161,7 +165,7 @@ export function MessageComponent({
                 <button
                   onClick={onRegenerateMessage}
                   disabled={isLoading || isRegenerating}
-                  className="flex items-center gap-1 px-2 py-1 text-xs text-white/60 hover:text-white bg-white/10 hover:bg-white/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-3 py-2 text-xs text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 active:scale-95"
                   title="Regenerate response"
                 >
                   {isRegenerating ? (
@@ -182,8 +186,9 @@ export function MessageComponent({
         </div>
 
         {message.role === "user" && (
-          <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center">
-            <User className="w-5 h-5 text-white" />
+          <div className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 bg-gradient-to-r from-emerald-500 via-blue-500 to-purple-500 rounded-2xl flex items-center justify-center shadow-xl relative ring-2 ring-white/20">
+            <User className="w-6 h-6 sm:w-6 sm:h-6 md:w-7 md:h-7 text-white drop-shadow-lg" />
+            <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500 via-blue-500 to-purple-500 rounded-2xl opacity-30 blur-sm animate-pulse" />
           </div>
         )}
       </div>

@@ -268,15 +268,31 @@ export default function Chat() {
   };  // Loading screen
   if (!isInitialized) {
     return (
-      <div className="h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="relative">
-            <div className="w-20 h-20 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-full mx-auto animate-pulse" />
-            <div className="absolute inset-0 w-20 h-20 bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 rounded-full mx-auto animate-ping opacity-75" />
+      <div className="h-screen bg-gradient-to-br from-gray-950 via-slate-900 to-gray-950 flex items-center justify-center relative overflow-hidden">
+        {/* Enhanced Background */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/20 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-purple-900/20 via-transparent to-transparent" />
+        
+        <div className="text-center relative z-10">
+          <div className="relative mb-8">
+            <div className="w-20 h-20 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-full mx-auto animate-pulse flex items-center justify-center">
+              <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <div className="absolute inset-0 w-20 h-20 bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 rounded-full mx-auto animate-ping opacity-30" />
           </div>
-          <p className="text-white/80 mt-4 text-lg">
-            Initializing Ploymind AI...
+          <h1 className="text-2xl font-semibold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent mb-2">
+            Ploymind AI
+          </h1>
+          <p className="text-white/60 text-base">
+            Initializing your intelligent assistant...
           </p>
+          <div className="flex items-center justify-center gap-1 mt-4">
+            <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+            <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+            <div className="w-2 h-2 bg-pink-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          </div>
         </div>
       </div>
     );
@@ -284,10 +300,15 @@ export default function Chat() {
 
   return (
     <div
-      className="h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex text-white overflow-hidden"
+      className="h-screen bg-gradient-to-br from-gray-950 via-slate-900 to-gray-950 flex text-white overflow-hidden relative safe-area-inset"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
+      {/* Enhanced Background with mobile optimization */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/30 via-transparent to-transparent opacity-80" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-purple-900/30 via-transparent to-transparent opacity-80" />
+      <div className="absolute inset-0 bg-gradient-to-br from-transparent via-cyan-900/10 to-transparent" />
+      
       {/* Sidebar */}
       <ChatSidebar
         sidebarOpen={sidebarOpen}
@@ -301,9 +322,9 @@ export default function Chat() {
 
       {/* Main Chat Area */}
       <div
-        className={`flex-1 flex flex-col transition-all duration-300 ${
+        className={`flex-1 flex flex-col transition-all duration-300 ease-in-out relative z-10 ${
           sidebarOpen ? "md:ml-0" : "ml-0"
-        }`}
+        } min-w-0 h-full`}
       >
         {/* Header */}
         <ChatHeader
