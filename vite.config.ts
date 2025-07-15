@@ -11,7 +11,8 @@ export default defineConfig(({ mode }) => {
   const backendUrl = env.VITE_BACKEND_URL || env.REACT_APP_BACKEND_URL;
   
   // Default fallback for development only
-  const defaultDevUrl = "http://localhost:8000";
+  // Development fallback URL, prefer VITE_BACKEND_URL_DEV
+  const defaultDevUrl = env.VITE_BACKEND_URL_DEV || "http://localhost:8000";
   
   const baseUrl = mode === "production" 
     ? backendUrl 
